@@ -1,4 +1,5 @@
 #include "PID.h"
+#include <iostream>
 
 /**
  * TODO: Complete the PID class. You may add any additional desired functions.
@@ -17,7 +18,7 @@ void PID::Init(double Kp_, double Ki_, double Kd_) {
   	Kd = Kd_;
   	
   	i_error = 0.0;
-  	d_error = 1.0;
+  	d_error = 0.0;	//car in the middle of the lane, i.e. d_error = 0?
 }
 
 void PID::UpdateError(double cte) {
@@ -26,8 +27,10 @@ void PID::UpdateError(double cte) {
   steering = -tau_p * cte - tau_d * diff_cte - tau_i * int_cte
   */
   i_error = i_error + cte;
-  d_error = cte - d_error;
+  d_error = cte - prev_diff;
+  prev_diff = cte;
   p_error = cte;
+  std::cout<<"p_error: " << p_error <<"  d_error: " << d_error <<"  i_error: " << i_error << std::endl;
 }
 
 double PID::TotalError() {
@@ -36,5 +39,6 @@ double PID::TotalError() {
    */
   //return 0.0;  // TODO: Add your total error calc here!
   double total_error = -Kp * p_error - Kd * d_error - Ki * i_error;
+  std::cout << "total_error: "<< total_error << std::endl;
   return total_error;
 }
