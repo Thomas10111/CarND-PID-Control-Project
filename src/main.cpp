@@ -7,6 +7,10 @@
 #include "PID.h"
 #include <vector>
 
+#define TIME_STEPS_STABILIZE (100)
+#define TIME_STEPS_ACCUM_ERROR (1400)
+
+
 // for convenience
 using nlohmann::json;
 using std::string;
@@ -36,18 +40,18 @@ int main() {
   uWS::Hub h;
 
   PID pid;
-  int count = 0;
+  int count = -50;   // extra time to get up to speed
   double cumm_error = 0;
   
   // twiddle parameters
-  int state = 0;  
-  std::vector<double> p{0.225, 0.0004, 4.0};
-  std::vector<double> dp{0.1, 0.0001, 0.1};
+  int state = 1;  
+  std::vector<double> p{0.24975, 0.000436436, 4.0};
+  std::vector<double> dp{p[0]/10.0, p[1]/10.0, p[2]/10.0};
   unsigned int i = 0;
   double best_err = 99999.0;
   
   //write to file
-  std::freopen( "output.txt", "w", stdout );
+  //std::freopen( "output.txt", "w", stdout );
   
   /**
    * TODO: Initialize the pid variable.
@@ -92,15 +96,13 @@ int main() {
           if(steer_value > 1.0) steer_value = 1.0;
           if(steer_value < -1.0) steer_value = -1.0;
          
-          if(count > 100)
+          if(count > TIME_STEPS_STABILIZE)
           {
-            cumm_error =+ cte * cte;
+            cumm_error += cte * cte;
             
-            if(count > 200)
+            if(count > (TIME_STEPS_STABILIZE + TIME_STEPS_ACCUM_ERROR))
             {
-              std::cout << "cumm_error: " << cumm_error << "  state: " << state << std::endl;
-              for(double &p: p) std::cout << p << ", ";
-              std::cout << std::endl;
+              std::cout << "count: " << count << "  cumm_error: " << cumm_error << "  state: " << state << "  best_err: " << best_err << "  i: " << i << std::endl;
               
               // evaluate current parameters
               if(state == 0)
@@ -109,6 +111,7 @@ int main() {
                 state = 1;
                 count = 0;
                 pid.Init(p[0], p[1], p[2]);
+                cumm_error = 0;
               }
               else if(state == 1)
               {
@@ -121,68 +124,48 @@ int main() {
                   if(i == p.size())
                   {
                     i = 0;
-                    //return 1;
-                   }
-                   else
-                   {
-                    //return 2;
-                     ;
-                   }
-                 }
-                 else
-                 {
-                   p[i] -= 2 * dp[i];
-                   pid.Init(p[0], p[1], p[2]);
-                   state = 2;
-                   count = 0;
-                 }
-               }
-               else if(state ==2)
-               {
-                 if(cumm_error < best_err)
-                 {
-                   best_err = cumm_error;
-                   dp[i] *= 1.1;
-                   state = 0;   // improved
-                   i += 1;
-                   if(i == p.size())
-                   {
-                     i = 0;
-                     //return 1;
-                   }
-                   else
-                   {
-                     ;//return 2;    // start again without trying p
-                   }
-                 }
-               }
-               else
-               {
-                 p[i] += dp[i];
-                 pid.Init(p[0], p[1], p[2]);
-                 dp[i] *= 0.9;
-                 state = 0;
-                 i += 1;
-                 if(i == p.size())
-                 {
-                    i = 0;
-                    //return 1;
-                 }
-                 else
-                 {
-                    ;//return 2; // start again without trying p
-                 }
-               }
-            }
-            std::cout << "count: " << count << "  state: " << state << std::endl;
-            for(double &p: p) std::cout << p << ", ";
-            std::cout << std::endl;
-          }    
+                  }
+                }
+                else
+                {
+                  p[i] -= 2 * dp[i];
+                  pid.Init(p[0], p[1], p[2]);
+                  state = 2;
+                  count = 0;
+                  cumm_error = 0;
+                }
+              }
+              else if(state ==2)
+              {
+                if(cumm_error < best_err)
+                {
+                  best_err = cumm_error;
+                  dp[i] *= 1.1;
+                }
+                else
+                {
+                  p[i] += dp[i];
+                  dp[i] *= 0.9;
+                }
+                
+                state = 0;   
+                i += 1;
+                if(i == p.size())
+                {
+                  i = 0;
+                }
+              }
+              else
+              {
+                std::cout << "!!!ERROR Unknown state!!! " <<  state << std::endl;
+              }
+            } 
+          }  //end count > TIME_STEPS_STABILIZE
           
           
           // DEBUG
-          std::cout << "count: " << count << "  CTE: " << cte << " Steering Value: " << steer_value 
-                    << "  speed: " << speed << std::endl;
+          //std::cout << "count: " << count << "  CTE: " << cte << " Steering Value: " << steer_value 
+          //          << "  speed: " << speed << std::endl;
 
          count+=1;
           
@@ -190,7 +173,7 @@ int main() {
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = 0.3;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);          
         }  // end "telemetry" if
       } else {
